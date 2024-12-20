@@ -2,14 +2,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: pod-reader-binding
-  namespace: default  # Specify the namespace where this RoleBinding will be applied
+  namespace: default
   labels:
-    kubettlreaper.samir.io/ttl: 1m
+    kubettlreaper.samir.io/ttl: 2m
 subjects:
   - kind: ServiceAccount
-    name: default  # Replace with your ServiceAccount name
-    namespace: default  # Namespace of the ServiceAccount
+    name: default
+    namespace: default
 roleRef:
   kind: Role
-  name: pod-reader  # The Role this RoleBinding is referencing
+  name: pod-reader
   apiGroup: rbac.authorization.k8s.io

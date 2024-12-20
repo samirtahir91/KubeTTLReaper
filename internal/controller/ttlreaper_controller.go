@@ -71,18 +71,26 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 
+	// Fetch the requeue interval from the ConfigMap
+	requeueAfterTime, err := r.getRequeueTimeFromConfigMap(configMap)
+	if err != nil {
+		l.Error(err, "Failed to get requeue interval from ConfigMap")
+		return ctrl.Result{}, err
+	}
+	l.Info("Requeue interval fetched from ConfigMap", "requeueAfter", requeueAfterTime)
+
 	// Parse the GVKs from the ConfigMap data
 	var gvkList []schema.GroupVersionKind
 	err = yaml.Unmarshal([]byte(configMap.Data["gvk-list"]), &gvkList)
 	if err != nil {
 		l.Error(err, "Failed to parse GVK list")
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, err
+		return ctrl.Result{RequeueAfter: requeueAfterTime}, err
 	}
 
 	// Log and skip processing if GVK list is empty
 	if len(gvkList) == 0 {
 		l.Info("GVK list is empty, skipping reconciliation")
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+		return ctrl.Result{RequeueAfter: requeueAfterTime}, nil
 	} else {
 		l.Info("GVK list is not empty", "gvkList", gvkList)
 	}
@@ -134,7 +142,24 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	return ctrl.Result{RequeueAfter: requeueAfterTime}, nil
+}
+
+// Get check interval from config map
+func (r *TtlReaperReconciler) getRequeueTimeFromConfigMap(configMap *corev1.ConfigMap) (time.Duration, error) {
+
+	// Get the value for the "check-interval" key
+	checkIntervalStr, exists := configMap.Data["check-interval"]
+	if !exists {
+		return 0, fmt.Errorf("check-interval not found in ConfigMap")
+	}
+
+	checkInterval, err := time.ParseDuration(checkIntervalStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid check-interval value: %v", err)
+	}
+
+	return checkInterval, nil
 }
 
 // Only use configmap named as per param
