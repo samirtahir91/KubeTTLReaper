@@ -92,14 +92,13 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		resources := &unstructured.UnstructuredList{}
 		resources.SetGroupVersionKind(gvk)
 
-		// Label selector for TTL label
-		labelSelector := client.MatchingLabels{
-			"kubettlreaper.samir.io/ttl": "",
+		opts := []client.ListOption{
+			client.HasLabels{TtlLabel},
 		}
 
-		if err := r.Client.List(ctx, resources, labelSelector); err != nil {
+		if err := r.Client.List(context.Background(), resources, opts...); err != nil {
 			l.Error(err, "Failed to list resources", "gvk", gvk.String())
-			continue
+			return ctrl.Result{}, err
 		}
 
 		// Log and skip if no resources found for the GVK
@@ -107,7 +106,7 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			l.Info("No resources found for GVK, skipping", "gvk", gvk.String())
 			continue
 		} else {
-			l.Info("Resources listed", "count", len(resources.Items), "gvk", gvk.String())
+			l.Info("Resources found", "count", len(resources.Items), "gvk", gvk.String())
 		}
 
 		// Loop through each resource and check TTL
