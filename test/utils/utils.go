@@ -126,7 +126,13 @@ func CreateSecret(ctx context.Context, k8sClient client.Client, name, namespace,
 }
 
 // Wait for an object to be deleted
-func WaitForDeleted(ctx context.Context, k8sClient client.Client, namespace string, name string, gvk schema.GroupVersionKind) {
+func WaitForDeleted(
+	ctx context.Context,
+	k8sClient client.Client,
+	namespace string,
+	name string,
+	gvk schema.GroupVersionKind,
+) {
 	resource := &unstructured.Unstructured{}
 	resource.SetGroupVersionKind(gvk)
 
@@ -141,7 +147,13 @@ func WaitForDeleted(ctx context.Context, k8sClient client.Client, namespace stri
 }
 
 // Function to create operator configMap with sample GVKs and check-interval
-func CreateConfigMap(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) (*corev1.ConfigMap, error) {
+func CreateConfigMap(
+	ctx context.Context,
+	k8sClient client.Client,
+	name,
+	namespace,
+	ttl string,
+) (*corev1.ConfigMap, error) {
 	// Define the GVK list in YAML format
 	gvkListYAML := `- group: ""
   version: "v1"
@@ -264,7 +276,7 @@ func IsPrometheusCRDsInstalled() bool {
 	if err != nil {
 		return false
 	}
-	crdList := GetNonEmptyLines(string(output))
+	crdList := GetNonEmptyLines(output)
 	for _, crd := range prometheusCRDs {
 		for _, line := range crdList {
 			if strings.Contains(line, crd) {
@@ -325,7 +337,7 @@ func IsCertManagerCRDsInstalled() bool {
 	}
 
 	// Check if any of the Cert Manager CRDs are present
-	crdList := GetNonEmptyLines(string(output))
+	crdList := GetNonEmptyLines(output)
 	for _, crd := range certManagerCRDs {
 		for _, line := range crdList {
 			if strings.Contains(line, crd) {
