@@ -4,7 +4,7 @@ metadata:
   name: pod-reader-binding
   namespace: default
   labels:
-    kubettlreaper.samir.io/ttl: 2m
+    kubettlreaper.samir.io/ttl: 1m
 subjects:
   - kind: ServiceAccount
     name: default

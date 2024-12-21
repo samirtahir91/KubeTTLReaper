@@ -19,12 +19,25 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	//lint:ignore ST1001
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	//lint:ignore ST1001
+	. "github.com/onsi/gomega" //nolint:golint,revive
+
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -34,10 +47,169 @@ const (
 
 	certmanagerVersion = "v1.16.0"
 	certmanagerURLTmpl = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
+	ConfigurationName  = "kube-ttl-reaper"
+	TtlLabel           = "kubettlreaper.samir.io/ttl"
 )
 
 func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+}
+
+// Function to create a namespace
+func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace string) error {
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+
+	if err := k8sClient.Create(ctx, ns); err != nil {
+		return fmt.Errorf("failed to create Namespace: %w", err)
+	}
+
+	return nil
+}
+
+// Create rolebinding
+func CreateRoleBinding(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) error {
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				TtlLabel: ttl,
+			},
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind: rbacv1.UserKind,
+				Name: "John117",
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "Spartan",
+		},
+	}
+
+	// Create RoleBinding
+	if err := k8sClient.Create(ctx, roleBinding); err != nil {
+		return fmt.Errorf("failed to create RoleBinding: %w", err)
+	}
+
+	return nil
+}
+
+// Create a Secret
+func CreateSecret(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) error {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				TtlLabel: ttl,
+			},
+		},
+		StringData: map[string]string{
+			"foo": "bar",
+		},
+	}
+
+	// Create Secret
+	if err := k8sClient.Create(ctx, secret); err != nil {
+		return fmt.Errorf("failed to create Secret: %w", err)
+	}
+
+	return nil
+}
+
+// Wait for an object to be deleted
+func WaitForDeleted(ctx context.Context, k8sClient client.Client, namespace string, name string, gvk schema.GroupVersionKind) {
+	resource := &unstructured.Unstructured{}
+	resource.SetGroupVersionKind(gvk)
+
+	Eventually(func() bool {
+		// Check if the GitHubApp still exists
+		err := k8sClient.Get(ctx, types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}, resource)
+		return apierrors.IsNotFound(err) // is deleted
+	}, "30s", "5s").Should(BeTrue(), fmt.Sprintf("Failed to delete %s within timeout", resource.GetName()))
+}
+
+// Function to create operator configMap with sample GVKs and check-interval
+func CreateConfigMap(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) (*corev1.ConfigMap, error) {
+	// Define the GVK list in YAML format
+	gvkListYAML := `- group: ""
+  version: "v1"
+  kind: "ConfigMap"
+- group: ""
+  version: "v1"
+  kind: "Secret"
+- group: "rbac.authorization.k8s.io"
+  version: "v1"
+  kind: "RoleBinding"`
+
+	// Create the ConfigMap with the desired structure
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"check-interval": ttl, // Update interval as per the desired format
+			"gvk-list":       gvkListYAML,
+		},
+	}
+
+	// Create the ConfigMap in the cluster
+	if err := k8sClient.Create(ctx, configMap); err != nil {
+		return nil, fmt.Errorf("failed to create ConfigMap: %w", err)
+	}
+
+	return configMap, nil
+}
+
+// Function to check and wait for an event in a namespace
+func CheckEvent(
+	ctx context.Context,
+	k8sClient client.Client,
+	configMapName string,
+	namespace string,
+	eventType string,
+	reason string,
+	message string,
+) error {
+	listOptions := &client.ListOptions{
+		Namespace: namespace,
+	}
+
+	// Event not found, wait for it
+	Eventually(func() error {
+		// list events
+		eventList := &corev1.EventList{}
+		err := k8sClient.List(ctx, eventList, listOptions)
+		if err != nil {
+			return fmt.Errorf("failed to list events: %v", err)
+		}
+		// Check the event exists
+		for _, evt := range eventList.Items {
+			if evt.InvolvedObject.Name == configMapName &&
+				evt.Type == eventType &&
+				evt.Reason == reason &&
+				strings.Contains(evt.Message, message) {
+				return nil // Event found
+			}
+		}
+
+		// Event not found yet
+		return fmt.Errorf("matching event not found")
+	}, "20s", "5s").Should(Succeed())
+
+	return nil
 }
 
 // Run executes the provided command within this context

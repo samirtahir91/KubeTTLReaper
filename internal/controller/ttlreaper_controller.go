@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,6 +49,7 @@ type TtlReaperReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	ConfigurationName string
+	Recorder          record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=core,resources=*,verbs=get;list;watch;create;update;patch;delete
@@ -86,6 +88,8 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		l.Error(err, "Failed to parse GVK list")
 		return ctrl.Result{RequeueAfter: requeueAfterTime}, err
 	}
+
+	r.raiseEvent(configMap, "Normal", "ValidConfig", "Processing GVKs from configMap")
 
 	// Log and skip processing if GVK list is empty
 	if len(gvkList) == 0 {
@@ -138,6 +142,7 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				if err := r.Client.Delete(ctx, &resource); err != nil {
 					l.Error(err, "Failed to delete resource", "resource", resource.GetName())
 				}
+				r.raiseEvent(&resource, "Normal", "ReapedOnTTL", "Deleted due to expired TTL")
 			}
 		}
 	}
@@ -160,6 +165,19 @@ func (r *TtlReaperReconciler) getRequeueTimeFromConfigMap(configMap *corev1.Conf
 	}
 
 	return checkInterval, nil
+}
+
+// Raise event in operator namespace
+func (r *TtlReaperReconciler) raiseEvent(obj client.Object, eventType, reason, message string) {
+	eventRef := &corev1.ObjectReference{
+		Kind:       obj.GetObjectKind().GroupVersionKind().Kind,
+		APIVersion: obj.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		Name:       obj.GetName(),
+		Namespace:  OperatorNamespace,
+		UID:        obj.GetUID(),
+	}
+
+	r.Recorder.Event(eventRef, eventType, reason, message)
 }
 
 // Only use configmap named as per param

@@ -156,8 +156,9 @@ func main() {
 	}
 
 	if err = (&controller.TtlReaperReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("kubettlreaper-controller"),
 	}).SetupWithManager(mgr, configurationName); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TtlReaper")
 		os.Exit(1)
