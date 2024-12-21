@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -74,6 +75,10 @@ var _ = BeforeSuite(func() {
 	}
 
 	var err error
+
+	osEnvErr := os.Setenv("OPERATOR_NAMESPACE", "kubettlreaper-system")
+	Expect(osEnvErr).NotTo(HaveOccurred())
+
 	// cfg is defined in this file globally.
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
