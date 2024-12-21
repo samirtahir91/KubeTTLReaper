@@ -20,4 +20,5 @@ jobs:
       - name: Running Tests
         run: |
           go mod tidy
+          export OPERATOR_NAMESPACE=kubettlreaper-system
           make test
