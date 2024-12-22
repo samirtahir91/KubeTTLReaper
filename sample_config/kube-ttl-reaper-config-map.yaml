@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-ttl-reaper
+  namespace: kubettlreaper-system
+data:
+  check-interval: 30s
+  gvk-list: |
+    - group: ""
+      version: "v1"
+      kind: "Pod"
+    - group: "apps"
+      version: "v1"
+      kind: "Deployment"
+    - group: "rbac.authorization.k8s.io"
+      version: "v1"
+      kind: "RoleBinding"
