@@ -65,6 +65,7 @@ spec:
           - --health-probe-bind-address=:8081
           - --configuration-name=kube-ttl-reaper
         image: controller:latest
+        imagePullPolicy: Never
         name: manager
         env:
           - name: DEBUG_LOG
