@@ -1,10 +1,58 @@
 # kubettlreaper
-// TODO(user): Add simple overview of use/purpose
+A Kubernetes operator that uses time-to-live to enable time-bound objects.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+It uses a single configMap to configure what Kinds of objects to check TTL for and the check interval.
 
-## Getting Started
+There are no CRDs to install.
+
+At every interval, the operator will get all resources matching a TTL label (`kubettlreaper.samir.io/ttl`) for each Kind configured to watch, and delete the resources if their TTL has expired (using creation timestamp + TTL as the calculation)
+
+## Example ConfigMap to configure Kinds to check for TTL
+- Configure group/version/kinds (GVKs) under `gvk-list` (all valid GVKs are supported)
+- Configure the check interval under `check-interval`
+```sh
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-ttl-reaper
+  namespace: kubettlreaper-system
+data:
+  check-interval: 30s
+  gvk-list: |
+    - group: ""
+      version: "v1"
+      kind: "Pod"
+    - group: "apps"
+      version: "v1"
+      kind: "Deployment"
+    - group: "rbac.authorization.k8s.io"
+      version: "v1"
+      kind: "RoleBinding"
+EOF
+```
+
+## Example to configure a TTL on a RoleBinding object
+- Add the label or create the object with the label and time value `kubettlreaper.samir.io/ttl`
+```sh
+kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: default
+  labels:
+    kubettlreaper.samir.io/ttl: 1m  # This label is all that is required
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+EOF
 
 ### Prerequisites
 - go version v1.22.0+
@@ -22,12 +70,6 @@ make docker-build docker-push IMG=<some-registry>/kubettlreaper:tag
 **NOTE:** This image ought to be published in the personal registry you specified.
 And it is required to have access to pull the image from the working environment.
 Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
-
-```sh
-make install
-```
 
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
@@ -64,6 +106,26 @@ make uninstall
 
 ```sh
 make undeploy
+```
+
+### Testing
+
+**Run the controller in the foreground for testing:**
+```sh
+export OPERATOR_NAMESPACE=kubettlreaper-system
+# run
+make run
+```
+
+**Run integration tests using env test (without a real cluster):**
+```sh
+export OPERATOR_NAMESPACE=kubettlreaper-system
+make test
+```
+
+**Generate coverage html report:**
+```sh
+go tool cover -html=cover.out -o coverage.html
 ```
 
 ## Project Distribution
