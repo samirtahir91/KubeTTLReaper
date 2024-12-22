@@ -11,6 +11,7 @@ At every interval, the operator will get all resources matching a TTL label (`ku
 ## Example ConfigMap to configure Kinds to check for TTL
 - Configure group/version/kinds (GVKs) under `gvk-list` (all valid GVKs are supported)
 - Configure the check interval under `check-interval`
+- The configMap name must match the arg in the controller Deployment spec, i.e. - `- --configuration-name=kube-ttl-reaper`
 ```sh
 kubectl apply -f - <<EOF
 apiVersion: v1
