@@ -54,6 +54,7 @@ roleRef:
   name: pod-reader
   apiGroup: rbac.authorization.k8s.io
 EOF
+```
 
 ### Prerequisites
 - go version v1.22.0+
