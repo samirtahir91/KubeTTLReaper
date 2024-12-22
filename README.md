@@ -117,7 +117,6 @@ make undeploy
 **Run the controller in the foreground for testing:**
 ```sh
 export OPERATOR_NAMESPACE=kubettlreaper-system
-# run
 make run
 ```
 
@@ -130,6 +129,12 @@ make test
 **Generate coverage html report:**
 ```sh
 go tool cover -html=cover.out -o coverage.html
+```
+
+**Run E2E test - creates a Kind cluster to use:**
+```sh
+make kind-delete
+make test-e2e
 ```
 
 ## Project Distribution
