@@ -56,6 +56,15 @@ roleRef:
 EOF
 ```
 
+### To deploy with Helm using public Docker image
+A helm chart is generated using `make helm`.
+```sh
+cd charts/kube-ttl-reaper
+helm upgrade --install -n kubettlreaper-system <release_name> . --create-namespace
+```
+- You can use the latest public image on DockerHub - `samirtahir91076/kube-ttl-reaper:latest`
+  - See [tags](https://hub.docker.com/r/samirtahir91076/kube-ttl-reaper/tags) 
+
 ## Development
 
 ### Prerequisites
