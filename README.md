@@ -1,4 +1,4 @@
-# kubettlreaper
+# kube-ttl-reaper
 A Kubernetes operator that uses time-to-live to enable time-bound objects.
 
 ## Description
