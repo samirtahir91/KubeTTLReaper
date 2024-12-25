@@ -4,7 +4,7 @@ metadata:
   name: kube-ttl-reaper
   namespace: kubettlreaper-system
 data:
-  check-interval: 30s
+  check-interval: 5m
   gvk-list: |
     - group: ""
       version: "v1"
