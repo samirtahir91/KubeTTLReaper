@@ -20,13 +20,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -40,7 +41,6 @@ const (
 )
 
 var (
-	MetadataLabel     = fmt.Sprintf("metadata.labels.%s", TtlLabel)
 	OperatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
 )
 
@@ -56,8 +56,8 @@ type TtlReaperReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=*/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=*/finalizers,verbs=update
 
-// Reconcile
-func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// Reconcile runs the main loop to house-keep objects with a TTL
+func (r *TtlReaperReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 
 	l.Info("Reconciling", "ConfigurationName", r.ConfigurationName)
@@ -99,6 +99,12 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		l.Info("GVK list is not empty", "gvkList", gvkList)
 	}
 
+	// Fetch name prefix from ConfigMap is defined
+	namePrefix := r.getNamePrefix(configMap)
+	if namePrefix != "" {
+		l.Info("Name prefix fetched from ConfigMap", "namePrefix", namePrefix)
+	}
+
 	// Loop through each GVK and list the resources
 	for _, gvk := range gvkList {
 		resources := &unstructured.UnstructuredList{}
@@ -111,6 +117,20 @@ func (r *TtlReaperReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := r.Client.List(context.Background(), resources, opts...); err != nil {
 			l.Error(err, "Failed to list resources", "gvk", gvk.String())
 			return ctrl.Result{}, err
+		}
+
+		// Apply name prefix filtering (if set)
+		if namePrefix != "" {
+			filteredResources := &unstructured.UnstructuredList{}
+			filteredResources.SetGroupVersionKind(gvk)
+
+			for _, item := range resources.Items {
+				if strings.HasPrefix(item.GetName(), namePrefix) {
+					filteredResources.Items = append(filteredResources.Items, item)
+				}
+			}
+
+			resources = filteredResources
 		}
 
 		// Log and skip if no resources found for the GVK
@@ -165,6 +185,14 @@ func (r *TtlReaperReconciler) getRequeueTimeFromConfigMap(configMap *corev1.Conf
 	}
 
 	return checkInterval, nil
+}
+
+// Get name prefix from config map
+func (r *TtlReaperReconciler) getNamePrefix(configMap *corev1.ConfigMap) string {
+	// Get the value for the "name-prefix" key if it exists
+	namePrefix := configMap.Data["name-prefix"]
+
+	return namePrefix
 }
 
 // Raise event in operator namespace
