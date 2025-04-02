@@ -24,8 +24,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+const namePrefix = "tmp-ttl-"
 
 var namespace = os.Getenv("OPERATOR_NAMESPACE")
 
@@ -57,7 +59,7 @@ var _ = Describe("TtlReaper Controller", Ordered, func() {
 	Context("When creating the operator ConfigMap", func() {
 		It("should successfully load the GVKs and check interval", func() {
 			By("Creating the operator configMap with sample GVKs")
-			configMap, err := utils.CreateConfigMap(ctx, k8sClient, utils.ConfigurationName, namespace, "5s")
+			configMap, err := utils.CreateConfigMap(ctx, k8sClient, utils.ConfigurationName, namespace, namePrefix, "5s")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap).NotTo(BeNil())
 			Expect(configMap.Data).To(HaveKey("check-interval"))
@@ -77,8 +79,8 @@ var _ = Describe("TtlReaper Controller", Ordered, func() {
 		})
 	})
 
-	Context("When creating a RoleBinding with a TTL of 10s", func() {
-		roleBindingName := "master-chief"
+	Context("When creating a RoleBinding with a TTL of 10s and valid namePrefix", func() {
+		roleBindingName := namePrefix + "master-chief"
 		It("should exist with a TTL", func() {
 			By("Creating the RoleBinding")
 			err := utils.CreateRoleBinding(ctx, k8sClient, roleBindingName, namespace, "10s")
@@ -91,13 +93,12 @@ var _ = Describe("TtlReaper Controller", Ordered, func() {
 				Version: "v1",
 				Kind:    "RoleBinding",
 			}
-			utils.WaitForDeleted(ctx, k8sClient, namespace, roleBindingName, gvk)
-			By("Waiting for the ReapedOnTTL event to be recorded")
+			utils.WaitForDeleted(ctx, k8sClient, namespace, roleBindingName, gvk, BeTrue(), "Delete")
 		})
 	})
 
-	Context("When creating a Secret with a TTL of 10s", func() {
-		secretName := "master-chief"
+	Context("When creating a Secret with a TTL of 10s and valid namePrefix", func() {
+		secretName := namePrefix + "master-chief"
 		It("should exist with a TTL", func() {
 			By("Creating the Secret")
 			err := utils.CreateSecret(ctx, k8sClient, secretName, namespace, "10s")
@@ -110,8 +111,25 @@ var _ = Describe("TtlReaper Controller", Ordered, func() {
 				Version: "v1",
 				Kind:    "Secret",
 			}
-			utils.WaitForDeleted(ctx, k8sClient, namespace, secretName, gvk)
-			By("Waiting for the ReapedOnTTL event to be recorded")
+			utils.WaitForDeleted(ctx, k8sClient, namespace, secretName, gvk, BeTrue(), "Delete")
+		})
+	})
+
+	Context("When creating a Secret with a TTL of 10s and invalid namePrefix", func() {
+		secretName := "master-chief"
+		It("should exist with a TTL", func() {
+			By("Creating the Secret")
+			err := utils.CreateSecret(ctx, k8sClient, secretName, namespace, "10s")
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should not be deleted after 10s by the operator", func() {
+			By("Waiting for the Secret not to be deleted after 10s")
+			gvk := schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Secret",
+			}
+			utils.WaitForDeleted(ctx, k8sClient, namespace, secretName, gvk, BeFalse(), "Skip delete")
 		})
 	})
 

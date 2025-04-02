@@ -8,9 +8,12 @@ There are no CRDs to install.
 
 At every interval, the operator will get all resources matching a TTL label (`kubettlreaper.samir.io/ttl`) for each Kind configured to watch, and delete the resources if their TTL has expired (using creation timestamp + TTL as the calculation)
 
+Optionally, you can configure the operator to only house-keep objects with a matching name prefix.
+
 ## Example ConfigMap to configure Kinds to check for TTL
 - Configure group/version/kinds (GVKs) under `gvk-list` (all valid GVKs are supported)
-- Configure the check interval under `check-interval`
+- Configure the check interval in `check-interval`
+- Optionally configure name prefix in `name-prefix` 
 - The configMap name must match the arg in the controller Deployment spec, i.e. - `- --configuration-name=kube-ttl-reaper`
 ```sh
 kubectl apply -f - <<EOF
@@ -20,7 +23,8 @@ metadata:
   name: kube-ttl-reaper
   namespace: kubettlreaper-system
 data:
-  check-interval: 5m
+  check-interval: "5m"
+  name-prefix: "tmp-ttl-"
   gvk-list: |
     - group: ""
       version: "v1"
@@ -41,7 +45,7 @@ kubectl apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: pod-reader-binding
+  name: tmp-ttl-pod-reader-binding
   namespace: default
   labels:
     kubettlreaper.samir.io/ttl: 1m  # This label is all that is required
@@ -158,8 +162,7 @@ make build-installer IMG=<some-registry>/kubettlreaper:tag
 
 NOTE: The makefile target mentioned above generates an 'install.yaml'
 file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without
-its dependencies.
+with Kustomize, which are necessary to install this project without its dependencies.
 
 2. Using the installer
 

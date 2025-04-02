@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
 	//lint:ignore ST1001
 	. "github.com/onsi/gomega" //nolint:golint,revive
+	gomegaTypes "github.com/onsi/gomega/types"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -55,7 +56,7 @@ func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
 }
 
-// Function to create a namespace
+// CreateNamespace creates a namespace
 func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace string) error {
 
 	ns := &corev1.Namespace{
@@ -71,7 +72,7 @@ func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace str
 	return nil
 }
 
-// Create rolebinding
+// CreateRoleBinding creates a rolebinding
 func CreateRoleBinding(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) error {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -102,7 +103,7 @@ func CreateRoleBinding(ctx context.Context, k8sClient client.Client, name, names
 	return nil
 }
 
-// Create a Secret
+// CreateSecret creates a Secret
 func CreateSecret(ctx context.Context, k8sClient client.Client, name, namespace, ttl string) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -125,33 +126,36 @@ func CreateSecret(ctx context.Context, k8sClient client.Client, name, namespace,
 	return nil
 }
 
-// Wait for an object to be deleted
+// WaitForDeleted waits for an object to be deleted or not
 func WaitForDeleted(
 	ctx context.Context,
 	k8sClient client.Client,
 	namespace string,
 	name string,
 	gvk schema.GroupVersionKind,
-) {
+	matcher gomegaTypes.GomegaMatcher,
+	msg string,
+) bool {
 	resource := &unstructured.Unstructured{}
 	resource.SetGroupVersionKind(gvk)
 
-	Eventually(func() bool {
+	return Eventually(func() bool {
 		// Check if the GitHubApp still exists
 		err := k8sClient.Get(ctx, types.NamespacedName{
 			Namespace: namespace,
 			Name:      name,
 		}, resource)
 		return apierrors.IsNotFound(err) // is deleted
-	}, "30s", "5s").Should(BeTrue(), fmt.Sprintf("Failed to delete %s within timeout", resource.GetName()))
+	}, "30s", "5s").Should(matcher, fmt.Sprintf("%s failed for %s within timeout", msg, resource.GetName()))
 }
 
-// Function to create operator configMap with sample GVKs and check-interval
+// CreateConfigMap creates the operator configMap with sample GVKs and check-interval
 func CreateConfigMap(
 	ctx context.Context,
 	k8sClient client.Client,
 	name,
 	namespace,
+	namePrefix,
 	ttl string,
 ) (*corev1.ConfigMap, error) {
 	// Define the GVK list in YAML format
@@ -173,6 +177,7 @@ func CreateConfigMap(
 		},
 		Data: map[string]string{
 			"check-interval": ttl, // Update interval as per the desired format
+			"name-prefix":    namePrefix,
 			"gvk-list":       gvkListYAML,
 		},
 	}
@@ -185,7 +190,7 @@ func CreateConfigMap(
 	return configMap, nil
 }
 
-// Function to check and wait for an event in a namespace
+// CheckEvent checks and wait for an event in a namespace
 func CheckEvent(
 	ctx context.Context,
 	k8sClient client.Client,

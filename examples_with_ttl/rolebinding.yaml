@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: pod-reader-binding
+  name: tmp-ttl-pod-reader-binding
   namespace: default
   labels:
     kubettlreaper.samir.io/ttl: 1m
